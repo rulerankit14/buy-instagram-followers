@@ -97,7 +97,7 @@ export default function Plans() {
       plan,
       createdAt: new Date().toISOString(),
     });
-    navigate("/success");
+    navigate("/payment");
   };
 
   return (
