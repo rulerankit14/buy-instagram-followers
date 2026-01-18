@@ -78,12 +78,30 @@ export default function Payment() {
           typeof cashfree?.create === "function" &&
           typeof cashfree?.pay === "function"
         ) {
-          // Cashfree.js v3 uses the "upiApp" component (not "upiIntent")
+          // Cashfree.js v3 uses the "upiApp" component (not "upiIntent").
+          // This component may require mounting to DOM to initialize properly.
           const upiApp = cashfree.create("upiApp", {
             values: {
               upiApp: opts.upiApp,
             },
           });
+
+          try {
+            if (typeof upiApp?.mount === "function") {
+              upiApp.mount("#cashfree-upi-mount");
+            }
+
+            if (typeof upiApp?.on === "function") {
+              upiApp.on("loaderror", () => {
+                cashfree.checkout({
+                  paymentSessionId: data.payment_session_id,
+                  returnUrl,
+                });
+              });
+            }
+          } catch {
+            // Ignore mount/listener issues and let checkout handle it.
+          }
 
           cashfree.pay({
             paymentSessionId: data.payment_session_id,
@@ -318,8 +336,11 @@ export default function Payment() {
               </Button>
             </div>
           </Card>
-        </section>
-      </main>
-    </GlowField>
+         </section>
+
+         {/* Hidden mount point required by Cashfree UPI app component */}
+         <div id="cashfree-upi-mount" className="hidden" aria-hidden="true" />
+       </main>
+     </GlowField>
   );
 }
