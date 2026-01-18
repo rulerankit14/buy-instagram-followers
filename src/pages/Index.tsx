@@ -120,8 +120,9 @@ const Index = () => {
 
   const onSubmit = (values: DraftForm) => {
     const normalized = normalizeUsername(values.username);
+    const canVerify = lookup.status === "found" || lookup.status === "blocked";
     const isVerified =
-      lookup.status === "found" &&
+      canVerify &&
       confirmedUsername &&
       confirmedUsername.toLowerCase() === normalized.toLowerCase();
 
@@ -140,7 +141,7 @@ const Index = () => {
 
   const canContinue =
     form.formState.isValid &&
-    lookup.status === "found" &&
+    (lookup.status === "found" || lookup.status === "blocked") &&
     !!confirmedUsername &&
     confirmedUsername.toLowerCase() === normalizeUsername(watchedUsername ?? "").toLowerCase();
 
@@ -242,7 +243,46 @@ const Index = () => {
                   </div>
                 ) : null}
 
-                {lookup.status === "not_found" || lookup.status === "blocked" ? (
+                {lookup.status === "blocked" ? (
+                  <div className="rounded-2xl border border-border/60 bg-background/60 p-4 shadow-soft">
+                    <div className="flex items-start gap-3">
+                      <div className="grid h-11 w-11 place-items-center rounded-2xl border border-border/60 bg-background/60 text-xs text-muted-foreground">
+                        @
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground">@{lookup.username}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{lookup.message}</p>
+                        <a
+                          href={`https://www.instagram.com/${lookup.username}/`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-block text-xs text-primary underline-offset-4 hover:underline"
+                        >
+                          Open on Instagram
+                        </a>
+                      </div>
+                      <Button
+                        type="button"
+                        variant={
+                          confirmedUsername?.toLowerCase() === lookup.username.toLowerCase()
+                            ? "secondary"
+                            : "brand"
+                        }
+                        size="sm"
+                        className="rounded-xl"
+                        onClick={() => {
+                          setConfirmedUsername(lookup.username);
+                          form.clearErrors("username");
+                          form.setValue("username", lookup.username, { shouldValidate: true, shouldTouch: true });
+                        }}
+                      >
+                        {confirmedUsername?.toLowerCase() === lookup.username.toLowerCase() ? "Selected" : "Select"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {lookup.status === "not_found" ? (
                   <p className="text-xs text-destructive">{lookup.message}</p>
                 ) : null}
 
