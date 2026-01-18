@@ -32,6 +32,8 @@ export type OrderDraft = z.infer<typeof orderDraftSchema>;
 
 export type Order = OrderDraft & {
   plan: OrderPlan;
+  /** Required for likes/views orders */
+  postUrl?: string;
   createdAt: string;
 };
 

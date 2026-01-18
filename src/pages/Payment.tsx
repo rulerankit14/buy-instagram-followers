@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { loadOrder } from "@/lib/order";
+import { loadOrder, saveOrder } from "@/lib/order";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
 
 // Import UPI app logos
 import phonePeLogo from "@/assets/phonepe-logo.webp";
@@ -37,6 +38,27 @@ export default function Payment() {
   const [selectedUpiApp, setSelectedUpiApp] = React.useState<
     "phonepe" | "gpay" | "paytm" | "bhim" | null
   >(null);
+
+  const needsPostUrl = order?.plan.service === "likes" || order?.plan.service === "views";
+
+  const postUrlSchema = React.useMemo(
+    () =>
+      z
+        .string()
+        .trim()
+        .min(1, "Post link is required")
+        .max(500, "Link is too long")
+        .url("Enter a valid URL")
+        .refine((v) => v.includes("instagram.com"), "Use a valid Instagram link"),
+    []
+  );
+
+  const [postUrl, setPostUrl] = React.useState<string>(order?.postUrl ?? "");
+  const postUrlError = React.useMemo(() => {
+    if (!needsPostUrl) return null;
+    const res = postUrlSchema.safeParse(postUrl);
+    return res.success ? null : res.error.issues[0]?.message ?? "Invalid link";
+  }, [needsPostUrl, postUrl, postUrlSchema]);
 
   const cashfreeRef = React.useRef<any>(null);
   const upiMethodsRef = React.useRef<Record<"phonepe" | "gpay" | "paytm" | "bhim", any> | null>(null);
@@ -89,9 +111,26 @@ export default function Payment() {
   const handlePayment = async (opts?: { upiApp?: "phonepe" | "gpay" | "paytm" | "bhim" }) => {
     if (!order) return;
 
+    if (needsPostUrl) {
+      const validated = postUrlSchema.safeParse(postUrl);
+      if (!validated.success) {
+        toast({
+          title: "Add post link",
+          description: validated.error.issues[0]?.message ?? "Please enter a valid Instagram post link.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // persist for success page / support reference
+      saveOrder({ ...order, postUrl: validated.data });
+    }
+
     setStatus("processing");
 
     try {
+      const notePost = needsPostUrl ? ` | Post: ${postUrlSchema.parse(postUrl)}` : "";
+
       // Create Cashfree order
       const { data, error } = await supabase.functions.invoke("create-cashfree-order", {
         body: {
@@ -101,7 +140,7 @@ export default function Payment() {
             customer_phone: order.phone,
             customer_name: order.username,
           },
-          order_note: `${order.plan.quantityLabel} - ${serviceLabel(order.plan.service)}`,
+          order_note: `${order.plan.quantityLabel} - ${serviceLabel(order.plan.service)}${notePost}`,
         },
       });
 
@@ -180,6 +219,27 @@ export default function Payment() {
               </div>
             </div>
 
+            {needsPostUrl ? (
+              <div className="mt-5 space-y-2">
+                <Label htmlFor="postUrl" className="text-sm">
+                  Instagram Post / Reel Link
+                </Label>
+                <Input
+                  id="postUrl"
+                  placeholder="https://www.instagram.com/p/..."
+                  inputMode="url"
+                  autoComplete="off"
+                  value={postUrl}
+                  onChange={(e) => setPostUrl(e.target.value)}
+                  className="h-12 rounded-2xl"
+                />
+                {postUrlError ? <p className="text-xs text-destructive">{postUrlError}</p> : null}
+                <p className="text-xs text-muted-foreground">
+                  Required for Likes/Views to target the correct post.
+                </p>
+              </div>
+            ) : null}
+
             <div className="mt-5 flex items-center justify-around gap-4 text-center text-xs text-muted-foreground">
               <div className="flex flex-col items-center gap-1">
                 <ShieldCheck className="h-5 w-5 text-primary" />
@@ -253,7 +313,7 @@ export default function Payment() {
                   size="pill"
                   className="mt-4 w-full text-base font-semibold"
                   onClick={() => void handlePayment()}
-                  disabled={status !== "idle"}
+                  disabled={status !== "idle" || (needsPostUrl && !!postUrlError)}
                 >
                   {status === "processing" && "Creating order…"}
                   {status === "redirecting" && "Opening payment…"}
@@ -305,7 +365,7 @@ export default function Payment() {
                   size="pill"
                   className="w-full text-base font-semibold"
                   onClick={() => void handlePayment()}
-                  disabled={status !== "idle"}
+                  disabled={status !== "idle" || (needsPostUrl && !!postUrlError)}
                 >
                   {status === "processing" && "Creating order…"}
                   {status === "redirecting" && "Opening payment…"}
@@ -344,7 +404,7 @@ export default function Payment() {
                   size="pill"
                   className="w-full text-base font-semibold"
                   onClick={() => void handlePayment()}
-                  disabled={status !== "idle"}
+                  disabled={status !== "idle" || (needsPostUrl && !!postUrlError)}
                 >
                   {status === "processing" && "Creating order…"}
                   {status === "redirecting" && "Opening payment…"}
